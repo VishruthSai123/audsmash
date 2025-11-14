@@ -1,52 +1,55 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import Loader from '../components/Loader';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const [isProcessing, setIsProcessing] = useState(true);
+  const { user, loading } = useAuth();
+  const [hasNavigated, setHasNavigated] = useState(false);
 
   useEffect(() => {
-    // Handle the OAuth callback
-    const handleCallback = async () => {
-      try {
-        // Wait a bit for Supabase to process the OAuth callback
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // The session is automatically set by Supabase
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Auth callback error:', error);
-          navigate('/auth?error=callback_failed', { replace: true });
-          return;
-        }
-
-        if (session) {
-          // Wait for profile creation to complete
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Successfully authenticated, redirect to home
-          navigate('/', { replace: true });
-        } else {
-          // No session, redirect to auth
-          navigate('/auth', { replace: true });
-        }
-      } catch (error) {
-        console.error('Callback handling error:', error);
-        navigate('/auth?error=callback_failed', { replace: true });
-      } finally {
-        setIsProcessing(false);
+    // Failsafe timeout - force navigation after 5 seconds
+    const failsafeTimer = setTimeout(() => {
+      if (!hasNavigated) {
+        console.warn('AuthCallback: Timeout reached, forcing navigation');
+        setHasNavigated(true);
+        navigate('/', { replace: true });
       }
-    };
+    }, 5000);
 
-    handleCallback();
-  }, [navigate]);
+    return () => clearTimeout(failsafeTimer);
+  }, [hasNavigated, navigate]);
 
-  if (!isProcessing) {
-    return null;
-  }
+  useEffect(() => {
+    // Wait for auth context to finish loading
+    if (loading) {
+      console.log('AuthCallback: Waiting for auth to load...');
+      return;
+    }
+
+    // Prevent multiple navigations
+    if (hasNavigated) {
+      return;
+    }
+
+    console.log('AuthCallback: Auth loaded, user:', user ? 'exists' : 'null');
+
+    // Small delay to ensure everything is settled
+    const timer = setTimeout(() => {
+      if (user) {
+        console.log('AuthCallback: User authenticated, navigating to home');
+        setHasNavigated(true);
+        navigate('/', { replace: true });
+      } else {
+        console.log('AuthCallback: No user, navigating to auth');
+        setHasNavigated(true);
+        navigate('/auth', { replace: true });
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [loading, user, navigate, hasNavigated]);
 
   return (
     <div className="auth-callback-page">
