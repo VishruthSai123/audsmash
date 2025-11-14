@@ -2666,17 +2666,18 @@
 
 .avatar-gallery-grid {
   padding: 1.25rem 1.5rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  display: flex;
+  flex-direction: row;
   gap: 0.875rem;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Custom scrollbar for avatar grid */
 .avatar-gallery-grid::-webkit-scrollbar {
-  width: 8px;
+  height: 8px;
 }
 
 .avatar-gallery-grid::-webkit-scrollbar-track {
@@ -2704,6 +2705,8 @@
   transition: all 0.3s ease;
   border: 2px solid transparent;
   background: #f8f8f8;
+  flex-shrink: 0;
+  width: 100px;
 }
 
 .avatar-option:hover {
@@ -2850,13 +2853,13 @@
   }
 
   .avatar-gallery-grid {
-    grid-template-columns: repeat(3, 1fr);
     gap: 0.625rem;
     padding: 1rem;
   }
 
   .avatar-option {
     padding: 0.5rem;
+    width: 90px;
   }
 
   .avatar-option img {
