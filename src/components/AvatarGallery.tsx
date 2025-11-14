@@ -8,7 +8,7 @@ interface AvatarGalleryProps {
   onClose: () => void;
 }
 
-// Avatar styles and seeds for dicebear
+// Avatar styles and seeds for dicebear - curated selection
 const AVATAR_STYLES = [
   { name: 'Adventurer', style: 'adventurer' },
   { name: 'Avataaars', style: 'avataaars' },
@@ -16,25 +16,21 @@ const AVATAR_STYLES = [
   { name: 'Bottts', style: 'bottts' },
   { name: 'Croodles', style: 'croodles' },
   { name: 'Fun Emoji', style: 'fun-emoji' },
-  { name: 'Identicon', style: 'identicon' },
   { name: 'Lorelei', style: 'lorelei' },
   { name: 'Micah', style: 'micah' },
   { name: 'Miniavs', style: 'miniavs' },
   { name: 'Notionists', style: 'notionists' },
-  { name: 'Open Peeps', style: 'open-peeps' },
   { name: 'Personas', style: 'personas' },
   { name: 'Pixel Art', style: 'pixel-art' },
-  { name: 'Rings', style: 'rings' },
-  { name: 'Shapes', style: 'shapes' },
 ];
 
-// Generate multiple variations for each style
+// Generate multiple variations for each style (reduced to 2 per style = 24 total)
 const generateAvatars = (username: string) => {
   const avatars: { url: string; name: string }[] = [];
-  const seeds = [username, `${username}_1`, `${username}_2`, `${username}_3`, `${username}_alt`, `${username}_cool`];
+  const seeds = [username, `${username}_alt`];
   
   AVATAR_STYLES.forEach(style => {
-    seeds.slice(0, 3).forEach((seed, index) => {
+    seeds.forEach((seed, index) => {
       avatars.push({
         url: `https://api.dicebear.com/7.x/${style.style}/svg?seed=${encodeURIComponent(seed)}`,
         name: `${style.name} ${index + 1}`
