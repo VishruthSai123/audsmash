@@ -34,7 +34,7 @@ export default function Leaderboard() {
       // OPTIMIZATION: Get all data in fewer queries
       const weekYear = getCurrentWeekYear();
 
-      // Query 1: Get all active songs for this week with their vote counts
+      // Query 1: Get all active songs for this week
       const { data: songsData } = await supabase
         .from('songs')
         .select('id, user_id, title, week_year')
@@ -47,7 +47,7 @@ export default function Leaderboard() {
         return;
       }
 
-      // Query 2: Get all votes for these songs in one query
+      // Query 2: Get ALL votes for these songs (total votes for entire week)
       const songIds = songsData.map((s: any) => s.id);
       const { data: votesData } = await supabase
         .from('votes')
@@ -61,16 +61,15 @@ export default function Leaderboard() {
         voteCounts[vote.song_id] = (voteCounts[vote.song_id] || 0) + 1;
       });
 
-      // Map songs to users
-      const userVotes: Record<string, { votes: number; song: any }> = {};
+      // Map songs to users and aggregate TOTAL votes per user (all their songs combined)
+      const userVotes: Record<string, { totalVotes: number; songs: any[] }> = {};
       songsData.forEach((song: any) => {
-        const voteCount = voteCounts[song.id] || 0;
-        if (voteCount > 0) {
-          userVotes[song.user_id] = {
-            votes: voteCount,
-            song: song
-          };
+        if (!userVotes[song.user_id]) {
+          userVotes[song.user_id] = { totalVotes: 0, songs: [] };
         }
+        const voteCount = voteCounts[song.id] || 0;
+        userVotes[song.user_id].totalVotes += voteCount;
+        userVotes[song.user_id].songs.push({ ...song, vote_count: voteCount });
       });
 
       // Query 3: Get profiles for users with votes
@@ -86,12 +85,12 @@ export default function Leaderboard() {
         .select('*')
         .in('id', userIds);
 
-      // Combine data
+      // Combine data - total votes = sum of all their active songs' votes
       const leaderboardData = (profiles || [])
         .map((profile: any) => ({
           profile,
-          total_votes: userVotes[profile.id]?.votes || 0,
-          current_song: userVotes[profile.id]?.song
+          total_votes: userVotes[profile.id]?.totalVotes || 0,
+          current_song: userVotes[profile.id]?.songs[0] // Most recent song
         }))
         .filter(entry => entry.total_votes > 0)
         .sort((a, b) => b.total_votes - a.total_votes);

@@ -2256,6 +2256,24 @@
   gap: 1rem;
 }
 
+/* Active Songs Container - Multiple slots display */
+.active-songs-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.song-card .slot-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
 .past-song-card {
   background: white;
   border-radius: 15px;

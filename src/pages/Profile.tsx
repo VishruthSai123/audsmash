@@ -15,7 +15,7 @@ export default function Profile() {
   const { user } = useAuth();
   
   const [profile, setProfile] = useState<ProfileType | null>(null);
-  const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const [activeSongs, setActiveSongs] = useState<Song[]>([]);
   const [pastSongs, setPastSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
@@ -48,8 +48,8 @@ export default function Profile() {
       setProfile(profileData as any);
       setUsername((profileData as any).username);
 
-      // Load ALL current active songs for this week
-      const { data: currentSongsData } = await supabase
+      // Load ALL active songs (up to 5) for this week
+      const { data: activeSongsData } = await supabase
         .from('songs')
         .select('*')
         .eq('user_id', profileId)
@@ -57,14 +57,15 @@ export default function Profile() {
         .eq('week_year', weekYear)
         .order('created_at', { ascending: false });
 
-      if (currentSongsData && currentSongsData.length > 0) {
+      if (activeSongsData && activeSongsData.length > 0) {
         // Get vote counts for all active songs
         const songsWithVotes = await Promise.all(
-          currentSongsData.map(async (song: any) => {
+          activeSongsData.map(async (song: any) => {
             const { count } = await supabase
               .from('votes')
               .select('*', { count: 'exact', head: true })
-              .eq('song_id', song.id);
+              .eq('song_id', song.id)
+              .eq('week_year', weekYear);
 
             return {
               ...song,
@@ -73,31 +74,28 @@ export default function Profile() {
           })
         );
 
-        // Set the most recent song as current, store others separately
-        setCurrentSong(songsWithVotes[0]);
-        // You can add state for other active songs if needed
+        setActiveSongs(songsWithVotes);
       }
 
-      // Load past songs (inactive songs or from previous weeks)
-      const { data: pastSongsData } = await supabase
+      // Load all uploaded songs (past songs and inactive songs)
+      const { data: allUploadedSongs } = await supabase
         .from('songs')
         .select('*')
         .eq('user_id', profileId)
         .or(`is_active.eq.false,week_year.neq.${weekYear}`)
-        .order('created_at', { ascending: false })
-        .limit(10);
+        .order('created_at', { ascending: false });
 
-      if (pastSongsData) {
-        // Get vote counts for past songs
+      if (allUploadedSongs) {
+        // Get vote counts for all uploaded songs
         const songsWithVotes = await Promise.all(
-          pastSongsData.map(async (song) => {
+          allUploadedSongs.map(async (song: any) => {
             const { count } = await supabase
               .from('votes')
               .select('*', { count: 'exact', head: true })
-              .eq('song_id', (song as any).id);
+              .eq('song_id', song.id);
 
             return {
-              ...(song as any),
+              ...song,
               vote_count: count || 0
             };
           })
@@ -256,7 +254,7 @@ export default function Profile() {
             <div className="stat">
               <FaMusic className="stat-icon" />
               <div>
-                <span className="stat-value">{pastSongs.length + (currentSong ? 1 : 0)}</span>
+                <span className="stat-value">{pastSongs.length + activeSongs.length}</span>
                 <span className="stat-label">Total Songs</span>
               </div>
             </div>
@@ -264,34 +262,39 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Current Song Section */}
-      {currentSong && (
+      {/* Active Songs Section - All Slotted Songs */}
+      {activeSongs.length > 0 && (
         <div className="current-song-section">
-          <h2><FaMusic /> Current Song</h2>
-          <div className="song-card featured">
-            <h3>{currentSong.title}</h3>
-            <p className="channel">{currentSong.channel_name}</p>
-            <div className="category-badge">{currentSong.category}</div>
-            
-            <div className="youtube-player">
-              <YouTube
-                videoId={currentSong.video_id}
-                opts={{
-                  ...youtubeOpts,
-                  playerVars: {
-                    ...youtubeOpts.playerVars,
-                    start: currentSong.start_time
-                  }
-                }}
-              />
-            </div>
+          <h2><FaMusic /> Active Songs ({activeSongs.length}/5 Slots)</h2>
+          <div className="active-songs-container">
+            {activeSongs.map((song, index) => (
+              <div key={song.id} className={`song-card ${index === 0 ? 'featured' : ''}`}>
+                <div className="slot-badge">Slot {index + 1}</div>
+                <h3>{song.title}</h3>
+                <p className="channel">{song.channel_name}</p>
+                <div className="category-badge">{song.category}</div>
+                
+                <div className="youtube-player">
+                  <YouTube
+                    videoId={song.video_id}
+                    opts={{
+                      ...youtubeOpts,
+                      playerVars: {
+                        ...youtubeOpts.playerVars,
+                        start: song.start_time
+                      }
+                    }}
+                  />
+                </div>
 
-            <div className="song-stats">
-              <span className="votes">❤️ {currentSong.vote_count} votes</span>
-              <span className="date">
-                Added {new Date(currentSong.created_at).toLocaleDateString()}
-              </span>
-            </div>
+                <div className="song-stats">
+                  <span className="votes">❤️ {song.vote_count} votes</span>
+                  <span className="date">
+                    Added {new Date(song.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -323,7 +326,7 @@ export default function Profile() {
         </div>
       )}
 
-      {isOwnProfile && !currentSong && (
+      {isOwnProfile && activeSongs.length === 0 && (
         <div className="no-current-song">
           <p>You haven't added a song this week yet!</p>
           <button 
