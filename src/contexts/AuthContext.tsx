@@ -25,15 +25,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Set timeout to prevent infinite loading
     const loadingTimeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('Auth loading timeout - setting loading to false');
+      if (mounted) {
+        console.warn('Auth loading timeout - forcing loading to false');
         setLoading(false);
       }
-    }, 5000);
+    }, 3000);
 
     // Check active sessions and sets the user
-    supabase.auth.getSession()
-      .then(async ({ data: { session }, error }) => {
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
         if (!mounted) return;
         
         if (error) {
@@ -42,14 +44,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Failed to get session:', error);
+      } finally {
         if (mounted) {
           setLoading(false);
         }
-      });
+      }
+    };
+
+    initializeAuth();
 
     // Listen for changes on auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -62,8 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_IN' && session?.user) {
         await ensureProfileExists(session.user);
       }
-      
-      setLoading(false);
     });
 
     return () => {
