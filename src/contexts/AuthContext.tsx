@@ -212,15 +212,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('Profile creation error:', profileError);
           }
         } else {
-          // Only update Google avatar on first OAuth login if using default dicebear
+          // Only update Google avatar on FIRST OAuth login if no avatar is set yet (null/undefined)
           const googleAvatar = 
             user.user_metadata?.avatar_url ||
             user.user_metadata?.picture ||
             (user.identities?.[0]?.identity_data?.avatar_url) ||
             (user.identities?.[0]?.identity_data?.picture);
 
-          // Only auto-update if still using dicebear default
-          if (googleAvatar && existingProfile.avatar_url?.includes('dicebear.com')) {
+          // Only auto-update if avatar is null/undefined (first time) or still using dicebear default
+          if (googleAvatar && (!existingProfile.avatar_url || existingProfile.avatar_url?.includes('dicebear.com'))) {
             await (supabase as any)
               .from('profiles')
               .update({ avatar_url: googleAvatar })
@@ -228,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .then(() => console.log('Updated profile with Google avatar'))
               .catch((err: any) => console.error('Failed to update avatar:', err));
           }
+          // If user has already set a custom avatar, don't override it
         }
       } catch (error) {
         console.error('Error ensuring profile exists:', error);
