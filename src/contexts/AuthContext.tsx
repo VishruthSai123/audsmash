@@ -11,6 +11,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfileAvatar: (newAvatarUrl: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,14 +69,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ensure loading is false immediately
       setLoading(false);
       
-      // Only create profile on initial sign-in, not on token refresh or user update
+      // Only create/sync profile on initial sign-in, never on refresh or update
       if (event === 'SIGNED_IN' && session?.user) {
         ensureProfileExists(session.user).catch(error => {
           console.error('Error ensuring profile exists:', error);
         });
       }
       
-      // Don't trigger profile creation on USER_UPDATED or TOKEN_REFRESHED
+      // NEVER sync Google avatar on TOKEN_REFRESHED, USER_UPDATED, or INITIAL_SESSION
+      // This prevents avatar flipping on page refresh
     });
 
     return () => {
@@ -179,9 +181,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Check if profile already exists
         const { data: existingProfile } = await supabase
           .from('profiles')
-          .select('id, avatar_url')
+          .select('id, avatar_url, created_at')
           .eq('id', user.id)
-          .maybeSingle() as { data: { id: string; avatar_url: string } | null };
+          .maybeSingle() as { data: { id: string; avatar_url: string; created_at: string } | null };
 
         if (!existingProfile) {
           // Generate username from email or user metadata
@@ -192,12 +194,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             `user_${user.id.slice(0, 8)}`;
 
           // Get Google profile picture with better quality
+          // Priority: OAuth provider avatar > Dicebear default
           const avatarUrl = 
             user.user_metadata?.avatar_url ||
             user.user_metadata?.picture ||
             (user.identities?.[0]?.identity_data?.avatar_url) ||
             (user.identities?.[0]?.identity_data?.picture) ||
             `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+
+          console.log('Creating profile with avatar:', avatarUrl.substring(0, 50) + '...');
 
           const { error: profileError } = await (supabase as any)
             .from('profiles')
@@ -212,23 +217,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('Profile creation error:', profileError);
           }
         } else {
-          // Only update Google avatar on FIRST OAuth login if no avatar is set yet (null/undefined)
+          // Profile already exists - only update avatar if using dicebear default AND on initial OAuth login
+          // This ensures Google avatars are used initially, but allows users to have custom avatars
           const googleAvatar = 
             user.user_metadata?.avatar_url ||
             user.user_metadata?.picture ||
             (user.identities?.[0]?.identity_data?.avatar_url) ||
             (user.identities?.[0]?.identity_data?.picture);
 
-          // Only auto-update if avatar is null/undefined (first time) or still using dicebear default
-          if (googleAvatar && (!existingProfile.avatar_url || existingProfile.avatar_url?.includes('dicebear.com'))) {
-            await (supabase as any)
-              .from('profiles')
-              .update({ avatar_url: googleAvatar })
-              .eq('id', user.id)
-              .then(() => console.log('Updated profile with Google avatar'))
-              .catch((err: any) => console.error('Failed to update avatar:', err));
+          // Only update from dicebear to Google avatar ONE TIME (when profile is very new)
+          // Check if profile was created very recently (within 5 minutes) - indicates first OAuth login
+          if (googleAvatar && existingProfile.avatar_url?.includes('dicebear.com')) {
+            const profileCreatedAt = new Date(existingProfile.created_at).getTime();
+            const now = new Date().getTime();
+            const ageInMinutes = (now - profileCreatedAt) / (1000 * 60);
+
+            // Only auto-update dicebear to Google if profile is less than 5 minutes old
+            if (ageInMinutes < 5) {
+              console.log('Updating new profile dicebear avatar to Google avatar');
+              await (supabase as any)
+                .from('profiles')
+                .update({ avatar_url: googleAvatar })
+                .eq('id', user.id)
+                .then(() => console.log('Updated profile with Google avatar'))
+                .catch((err: any) => console.error('Failed to update avatar:', err));
+            } else {
+              console.log('Profile is old, keeping existing dicebear avatar');
+            }
           }
-          // If user has already set a custom avatar, don't override it
+          // If already has a Google avatar or custom avatar, never change it on refresh
         }
       } catch (error) {
         console.error('Error ensuring profile exists:', error);
@@ -250,6 +267,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateProfileAvatar = async (newAvatarUrl: string) => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      const { error } = await (supabase as any)
+        .from('profiles')
+        .update({ avatar_url: newAvatarUrl })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      console.log('Profile avatar updated successfully');
+    } catch (error: any) {
+      console.error('Avatar update error:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     session,
@@ -258,6 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signInWithGoogle,
     signOut,
+    updateProfileAvatar,
   };
 
   return (
