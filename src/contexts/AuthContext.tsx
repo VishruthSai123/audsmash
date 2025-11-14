@@ -59,12 +59,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
+      console.log('Auth state change:', event);
+      
       setSession(session);
       setUser(session?.user ?? null);
       
       // Create profile for OAuth sign-ins
       if (event === 'SIGNED_IN' && session?.user) {
-        await ensureProfileExists(session.user);
+        try {
+          await ensureProfileExists(session.user);
+        } catch (error) {
+          console.error('Error ensuring profile exists:', error);
+        }
+      }
+      
+      // Ensure loading is false after auth changes
+      if (mounted) {
+        setLoading(false);
       }
     });
 
