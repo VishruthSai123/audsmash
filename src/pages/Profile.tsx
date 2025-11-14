@@ -48,29 +48,37 @@ export default function Profile() {
       setProfile(profileData as any);
       setUsername((profileData as any).username);
 
-      // Load current active song
-      const { data: currentSongData } = await supabase
+      // Load ALL current active songs for this week
+      const { data: currentSongsData } = await supabase
         .from('songs')
         .select('*')
         .eq('user_id', profileId)
         .eq('is_active', true)
         .eq('week_year', weekYear)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
-      if (currentSongData) {
-        // Get vote count
-        const { count } = await supabase
-          .from('votes')
-          .select('*', { count: 'exact', head: true })
-          .eq('song_id', (currentSongData as any).id);
+      if (currentSongsData && currentSongsData.length > 0) {
+        // Get vote counts for all active songs
+        const songsWithVotes = await Promise.all(
+          currentSongsData.map(async (song: any) => {
+            const { count } = await supabase
+              .from('votes')
+              .select('*', { count: 'exact', head: true })
+              .eq('song_id', song.id);
 
-        setCurrentSong({
-          ...(currentSongData as any),
-          vote_count: count || 0
-        });
+            return {
+              ...song,
+              vote_count: count || 0
+            };
+          })
+        );
+
+        // Set the most recent song as current, store others separately
+        setCurrentSong(songsWithVotes[0]);
+        // You can add state for other active songs if needed
       }
 
-      // Load past songs (all songs except current active one)
+      // Load past songs (inactive songs or from previous weeks)
       const { data: pastSongsData } = await supabase
         .from('songs')
         .select('*')

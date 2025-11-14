@@ -22,6 +22,7 @@ export default function Listen() {
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
   const [topToday, setTopToday] = useState<Song[]>([]);
   const [topProfiles, setTopProfiles] = useState<Profile[]>([]);
+  const [votingInProgress, setVotingInProgress] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadSongs();
@@ -75,37 +76,48 @@ export default function Listen() {
         .order('created_at', { ascending: false });
 
       if (songsError) throw songsError;
+      if (!songsData || songsData.length === 0) {
+        setSongs([]);
+        setFilteredSongs([]);
+        setLoading(false);
+        return;
+      }
 
-      // Load votes for each song
-      const songsWithVotes = await Promise.all(
-        (songsData || []).map(async (song) => {
-          const { count } = await supabase
-            .from('votes')
-            .select('*', { count: 'exact', head: true })
-            .eq('song_id', (song as any).id)
-            .eq('week_year', weekYear);
+      // OPTIMIZATION: Batch load ALL votes for ALL songs in 2 queries instead of 2N
+      const songIds = songsData.map((s: any) => s.id);
 
-          // Check if current user voted
-          let userVoted = false;
-          if (user) {
-            const { data: voteData } = await supabase
-              .from('votes')
-              .select('*')
-              .eq('song_id', (song as any).id)
-              .eq('voter_id', user.id)
-              .eq('week_year', weekYear)
-              .maybeSingle();
-            
-            userVoted = !!voteData;
-          }
+      // Query 1: Get all vote counts for all songs at once
+      const { data: allVotes } = await supabase
+        .from('votes')
+        .select('song_id')
+        .in('song_id', songIds)
+        .eq('week_year', weekYear);
 
-          return {
-            ...(song as any),
-            vote_count: count || 0,
-            user_voted: userVoted
-          };
-        })
-      );
+      // Count votes per song
+      const voteCounts: Record<string, number> = {};
+      (allVotes || []).forEach((vote: any) => {
+        voteCounts[vote.song_id] = (voteCounts[vote.song_id] || 0) + 1;
+      });
+
+      // Query 2: Get current user's votes for all songs at once (if logged in)
+      let userVotes: Set<string> = new Set();
+      if (user) {
+        const { data: userVoteData } = await supabase
+          .from('votes')
+          .select('song_id')
+          .in('song_id', songIds)
+          .eq('voter_id', user.id)
+          .eq('week_year', weekYear);
+
+        userVotes = new Set((userVoteData || []).map((v: any) => v.song_id));
+      }
+
+      // Combine data
+      const songsWithVotes = songsData.map((song: any) => ({
+        ...song,
+        vote_count: voteCounts[song.id] || 0,
+        user_voted: userVotes.has(song.id)
+      }));
 
       setSongs(songsWithVotes);
       filterSongs(songsWithVotes, selectedCategory);
@@ -166,49 +178,63 @@ export default function Listen() {
     try {
       const weekYear = getCurrentWeekYear();
 
-      // Get all profiles
-      const { data: profilesData, error: profilesError } = await supabase
+      // OPTIMIZATION: Use the same approach as leaderboard
+      // Query 1: Get all active songs for this week
+      const { data: songsData } = await supabase
+        .from('songs')
+        .select('id, user_id')
+        .eq('is_active', true)
+        .eq('week_year', weekYear);
+
+      if (!songsData || songsData.length === 0) return;
+
+      // Query 2: Get all votes for these songs
+      const songIds = songsData.map((s: any) => s.id);
+      const { data: votesData } = await supabase
+        .from('votes')
+        .select('song_id')
+        .in('song_id', songIds)
+        .eq('week_year', weekYear);
+
+      // Count votes per user
+      const userVotes: Record<string, number> = {};
+      const songToUser: Record<string, string> = {};
+      
+      songsData.forEach((song: any) => {
+        songToUser[song.id] = song.user_id;
+        if (!userVotes[song.user_id]) {
+          userVotes[song.user_id] = 0;
+        }
+      });
+
+      (votesData || []).forEach((vote: any) => {
+        const userId = songToUser[vote.song_id];
+        if (userId) {
+          userVotes[userId] = (userVotes[userId] || 0) + 1;
+        }
+      });
+
+      // Get top 10 user IDs
+      const topUserIds = Object.entries(userVotes)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10)
+        .map(([userId]) => userId);
+
+      if (topUserIds.length === 0) return;
+
+      // Query 3: Get profiles for top users
+      const { data: profiles } = await supabase
         .from('profiles')
-        .select('*');
+        .select('*')
+        .in('id', topUserIds);
 
-      if (profilesError) throw profilesError;
-      if (!profilesData) return;
-
-      // Calculate current week votes for each profile
-      const profilesWithVotes = await Promise.all(
-        profilesData.map(async (profile: any) => {
-          // Get all active songs by this user for current week
-          const { data: userSongs } = await supabase
-            .from('songs')
-            .select('id')
-            .eq('user_id', profile.id)
-            .eq('is_active', true)
-            .eq('week_year', weekYear) as { data: { id: string }[] | null };
-
-          if (!userSongs || userSongs.length === 0) {
-            return { ...profile, current_week_votes: 0 };
-          }
-
-          // Count total votes for all their songs this week
-          let totalVotes = 0;
-          for (const song of userSongs) {
-            const { count } = await supabase
-              .from('votes')
-              .select('*', { count: 'exact', head: true })
-              .eq('song_id', song.id)
-              .eq('week_year', weekYear);
-            
-            totalVotes += count || 0;
-          }
-
-          return { ...profile, current_week_votes: totalVotes };
-        })
-      );
-
-      // Sort by current week votes and take top 10
-      const topProfiles = profilesWithVotes
-        .sort((a, b) => b.current_week_votes - a.current_week_votes)
-        .slice(0, 10);
+      // Add vote counts and sort
+      const topProfiles = (profiles || [])
+        .map((profile: any) => ({
+          ...profile,
+          current_week_votes: userVotes[profile.id] || 0
+        }))
+        .sort((a, b) => b.current_week_votes - a.current_week_votes);
 
       setTopProfiles(topProfiles);
     } catch (err) {
@@ -253,9 +279,31 @@ export default function Listen() {
       return;
     }
 
+    // Prevent double-clicking/spam
+    if (votingInProgress.has(song.id)) {
+      return;
+    }
+
     const weekYear = getCurrentWeekYear();
 
     try {
+      // Add to in-progress set
+      setVotingInProgress(prev => new Set(prev).add(song.id));
+
+      // Optimistic UI update
+      const optimisticSongs = songs.map(s => {
+        if (s.id === song.id) {
+          return {
+            ...s,
+            user_voted: !s.user_voted,
+            vote_count: s.user_voted ? (s.vote_count || 0) - 1 : (s.vote_count || 0) + 1
+          };
+        }
+        return s;
+      });
+      setSongs(optimisticSongs);
+      filterSongs(optimisticSongs, selectedCategory);
+
       if (song.user_voted) {
         // Remove vote
         await supabase
@@ -275,13 +323,24 @@ export default function Listen() {
           } as any);
       }
 
-      // Reload songs to update vote counts
-      loadSongs();
+      // Reload songs to get accurate counts (in background)
+      setTimeout(() => loadSongs(), 1000);
     } catch (err: any) {
       console.error('Error voting:', err);
       if (err.code === '23505') {
         alert('You have already voted for this song');
       }
+      // Reload on error to restore correct state
+      loadSongs();
+    } finally {
+      // Remove from in-progress after short delay
+      setTimeout(() => {
+        setVotingInProgress(prev => {
+          const next = new Set(prev);
+          next.delete(song.id);
+          return next;
+        });
+      }, 500);
     }
   };
 

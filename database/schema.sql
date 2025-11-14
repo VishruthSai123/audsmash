@@ -219,20 +219,36 @@ CREATE TRIGGER update_weekly_votes_trigger
   FOR EACH ROW EXECUTE FUNCTION update_weekly_votes();
 
 -- Function to ensure only one active song per user
-CREATE OR REPLACE FUNCTION ensure_one_active_song()
+CREATE OR REPLACE FUNCTION ensure_max_active_songs()
 RETURNS TRIGGER AS $$
+DECLARE
+  active_count INTEGER;
+  oldest_song_id UUID;
 BEGIN
   IF NEW.is_active = TRUE THEN
-    -- Deactivate all other songs for this user
-    UPDATE public.songs
-    SET is_active = FALSE
-    WHERE user_id = NEW.user_id AND id != NEW.id AND is_active = TRUE;
+    -- Count current active songs for this user
+    SELECT COUNT(*) INTO active_count
+    FROM public.songs
+    WHERE user_id = NEW.user_id AND is_active = TRUE AND id != NEW.id;
+
+    -- If user already has 5 active songs, deactivate the oldest one
+    IF active_count >= 5 THEN
+      SELECT id INTO oldest_song_id
+      FROM public.songs
+      WHERE user_id = NEW.user_id AND is_active = TRUE AND id != NEW.id
+      ORDER BY created_at ASC
+      LIMIT 1;
+
+      UPDATE public.songs
+      SET is_active = FALSE
+      WHERE id = oldest_song_id;
+    END IF;
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger for active song management
-CREATE TRIGGER ensure_one_active_song_trigger
+CREATE TRIGGER ensure_max_active_songs_trigger
   BEFORE INSERT OR UPDATE ON public.songs
-  FOR EACH ROW EXECUTE FUNCTION ensure_one_active_song();
+  FOR EACH ROW EXECUTE FUNCTION ensure_max_active_songs();

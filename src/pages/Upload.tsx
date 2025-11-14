@@ -87,23 +87,26 @@ export default function Upload() {
     try {
       const weekYear = getCurrentWeekYear();
 
-      // Check if user already has an active song
-      const { data: existingSongs } = await supabase
+      // Check how many active songs user currently has
+      const { data: activeSongs } = await supabase
         .from('songs')
-        .select('*')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      const activeCount = activeSongs?.length || 0;
+
+      // Get the oldest active song for tracking
+      const { data: oldestSong } = await supabase
+        .from('songs')
+        .select('id')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .maybeSingle();
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle() as { data: { id: string } | null };
 
-      // Deactivate existing active song
-      if (existingSongs) {
-        await (supabase as any)
-          .from('songs')
-          .update({ is_active: false })
-          .eq('id', (existingSongs as any).id);
-      }
-
-      // Insert new song
+      // Insert new song (trigger will auto-deactivate oldest if needed)
       const { data: newSong, error: insertError } = await supabase
         .from('songs')
         .insert({
@@ -128,12 +131,13 @@ export default function Upload() {
         .from('song_changes')
         .insert({
           user_id: user.id,
-          old_song_id: (existingSongs as any)?.id || null,
+          old_song_id: (activeCount >= 5 && oldestSong) ? oldestSong.id : null,
           new_song_id: (newSong as any).id,
           change_date: today
         } as any);
 
-      setSuccess('Song added successfully! 🎵');
+      const slotsUsed = Math.min(activeCount + 1, 5);
+      setSuccess(`Song added successfully! 🎵 (${slotsUsed}/5 slots used)`);
       setTimeout(() => {
         navigate('/listen');
       }, 1500);
