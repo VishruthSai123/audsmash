@@ -64,18 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       
-      // Create profile for OAuth sign-ins
-      if (event === 'SIGNED_IN' && session?.user) {
-        try {
-          await ensureProfileExists(session.user);
-        } catch (error) {
-          console.error('Error ensuring profile exists:', error);
-        }
-      }
+      // Ensure loading is false immediately after setting user
+      setLoading(false);
       
-      // Ensure loading is false after auth changes
-      if (mounted) {
-        setLoading(false);
+      // Create profile for OAuth sign-ins (non-blocking)
+      if (event === 'SIGNED_IN' && session?.user) {
+        ensureProfileExists(session.user).catch(error => {
+          console.error('Error ensuring profile exists:', error);
+        });
       }
     });
 
@@ -174,60 +170,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const ensureProfileExists = async (user: User) => {
-    try {
-      // Check if profile already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id, avatar_url')
-        .eq('id', user.id)
-        .maybeSingle() as { data: { id: string; avatar_url: string } | null };
-
-      if (!existingProfile) {
-        // Generate username from email or user metadata
-        const username = 
-          user.user_metadata?.full_name ||
-          user.user_metadata?.name ||
-          user.email?.split('@')[0] ||
-          `user_${user.id.slice(0, 8)}`;
-
-        // Get Google profile picture with better quality
-        const avatarUrl = 
-          user.user_metadata?.avatar_url ||
-          user.user_metadata?.picture ||
-          (user.identities?.[0]?.identity_data?.avatar_url) ||
-          (user.identities?.[0]?.identity_data?.picture) ||
-          `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
-
-        const { error: profileError } = await (supabase as any)
+    // Timeout wrapper to prevent hanging
+    const profilePromise = (async () => {
+      try {
+        // Check if profile already exists
+        const { data: existingProfile } = await supabase
           .from('profiles')
-          .insert({
-            id: user.id,
-            username: username,
-            avatar_url: avatarUrl,
-            total_weekly_votes: 0
-          });
+          .select('id, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle() as { data: { id: string; avatar_url: string } | null };
 
-        if (profileError && profileError.code !== '23505') {
-          console.error('Profile creation error:', profileError);
-        }
-      } else {
-        // Update existing profile with Google avatar if available
-        const googleAvatar = 
-          user.user_metadata?.avatar_url ||
-          user.user_metadata?.picture ||
-          (user.identities?.[0]?.identity_data?.avatar_url) ||
-          (user.identities?.[0]?.identity_data?.picture);
+        if (!existingProfile) {
+          // Generate username from email or user metadata
+          const username = 
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split('@')[0] ||
+            `user_${user.id.slice(0, 8)}`;
 
-        if (googleAvatar && existingProfile.avatar_url?.includes('dicebear')) {
-          await (supabase as any)
+          // Get Google profile picture with better quality
+          const avatarUrl = 
+            user.user_metadata?.avatar_url ||
+            user.user_metadata?.picture ||
+            (user.identities?.[0]?.identity_data?.avatar_url) ||
+            (user.identities?.[0]?.identity_data?.picture) ||
+            `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+
+          const { error: profileError } = await (supabase as any)
             .from('profiles')
-            .update({ avatar_url: googleAvatar })
-            .eq('id', user.id);
+            .insert({
+              id: user.id,
+              username: username,
+              avatar_url: avatarUrl,
+              total_weekly_votes: 0
+            });
+
+          if (profileError && profileError.code !== '23505') {
+            console.error('Profile creation error:', profileError);
+          }
+        } else {
+          // Update existing profile with Google avatar if available
+          const googleAvatar = 
+            user.user_metadata?.avatar_url ||
+            user.user_metadata?.picture ||
+            (user.identities?.[0]?.identity_data?.avatar_url) ||
+            (user.identities?.[0]?.identity_data?.picture);
+
+          if (googleAvatar && existingProfile.avatar_url?.includes('dicebear')) {
+            await (supabase as any)
+              .from('profiles')
+              .update({ avatar_url: googleAvatar })
+              .eq('id', user.id);
+          }
         }
+      } catch (error) {
+        console.error('Error ensuring profile exists:', error);
       }
-    } catch (error) {
-      console.error('Error ensuring profile exists:', error);
-    }
+    })();
+
+    // Add timeout - don't wait more than 5 seconds
+    const timeout = new Promise((resolve) => setTimeout(resolve, 5000));
+    await Promise.race([profilePromise, timeout]);
   };
 
   const signOut = async () => {
