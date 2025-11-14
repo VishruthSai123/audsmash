@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaTrophy, FaMusic, FaHistory, FaEdit } from 'react-icons/fa';
+import { FaTrophy, FaMusic, FaHistory, FaEdit, FaCamera } from 'react-icons/fa';
 import YouTube from 'react-youtube';
 import { supabase, getCurrentWeekYear } from '../lib/supabase';
 import type { Profile as ProfileType, Song } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
+import AvatarGallery from '../components/AvatarGallery';
 
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
@@ -18,6 +19,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [username, setUsername] = useState('');
+  const [showAvatarGallery, setShowAvatarGallery] = useState(false);
 
   const isOwnProfile = user && userId === user.id;
 
@@ -120,6 +122,24 @@ export default function Profile() {
     }
   };
 
+  const handleUpdateAvatar = async (avatarUrl: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await (supabase as any)
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      loadProfile(user.id);
+    } catch (err: any) {
+      console.error('Error updating avatar:', err);
+      alert(err.message || 'Failed to update avatar');
+    }
+  };
+
   const youtubeOpts = {
     height: '180',
     width: '100%',
@@ -160,6 +180,15 @@ export default function Profile() {
             className="profile-avatar-large"
             size={120}
           />
+          {isOwnProfile && (
+            <button 
+              className="edit-avatar-button"
+              onClick={() => setShowAvatarGallery(true)}
+              title="Change Avatar"
+            >
+              <FaCamera />
+            </button>
+          )}
         </div>
 
         <div className="profile-info">
@@ -279,6 +308,16 @@ export default function Profile() {
             Add Your First Song
           </button>
         </div>
+      )}
+
+      {/* Avatar Gallery Modal */}
+      {showAvatarGallery && isOwnProfile && (
+        <AvatarGallery
+          currentAvatar={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.username)}`}
+          username={profile.username}
+          onSelect={handleUpdateAvatar}
+          onClose={() => setShowAvatarGallery(false)}
+        />
       )}
     </div>
   );
