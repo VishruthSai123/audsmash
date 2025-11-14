@@ -315,6 +315,8 @@ export default function Listen() {
     height: '100%',
     playerVars: {
       autoplay: 0,
+      modestbranding: 1,
+      rel: 0,
     },
   };
 
