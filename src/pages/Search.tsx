@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FaSearch, FaPlus } from 'react-icons/fa';
 import { searchYouTube } from '../services/youtube.service';
 import type { YouTubeSearchResult } from '../types';
+import Loader from '../components/Loader';
 
 export default function Search() {
   const [query, setQuery] = useState('');
@@ -104,8 +105,8 @@ export default function Search() {
 
       {loading && (
         <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Searching YouTube...</p>
+          <Loader />
+          <p>Searching...</p>
         </div>
       )}
     </div>

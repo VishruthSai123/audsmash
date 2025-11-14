@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import TopBar from './components/TopBar';
 import BottomNav from './components/BottomNav';
 import ErrorBoundary from './components/ErrorBoundary';
+import Loader from './components/Loader';
 import Leaderboard from './pages/Leaderboard';
 import Upload from './pages/Upload';
 import Listen from './pages/Listen';
@@ -18,7 +19,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="loading-screen">
-        <div className="spinner"></div>
+        <Loader />
         <p>Loading...</p>
       </div>
     );

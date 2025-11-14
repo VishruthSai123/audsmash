@@ -7,6 +7,7 @@ import type { Profile as ProfileType, Song } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import AvatarGallery from '../components/AvatarGallery';
+import Loader from '../components/Loader';
 
 export default function Profile() {
   const { userId } = useParams<{ userId: string }>();
@@ -152,7 +153,7 @@ export default function Profile() {
     return (
       <div className="profile-page">
         <div className="loading-spinner">
-          <div className="spinner"></div>
+          <Loader />
           <p>Loading profile...</p>
         </div>
       </div>

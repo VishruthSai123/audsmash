@@ -7,6 +7,7 @@ import type { Song, Comment, Category, Profile } from '../types';
 import { CATEGORIES } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
+import Loader from '../components/Loader';
 
 export default function Listen() {
   const { user } = useAuth();
@@ -321,7 +322,7 @@ export default function Listen() {
     return (
       <div className="listen-page">
         <div className="loading-spinner">
-          <div className="spinner"></div>
+          <Loader />
           <p>Loading songs...</p>
         </div>
       </div>

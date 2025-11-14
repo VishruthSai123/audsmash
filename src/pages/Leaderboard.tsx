@@ -4,6 +4,7 @@ import { FaTrophy, FaMedal, FaMusic } from 'react-icons/fa';
 import { supabase, getCurrentWeekYear } from '../lib/supabase';
 import type { LeaderboardEntry } from '../types';
 import Avatar from '../components/Avatar';
+import Loader from '../components/Loader';
 
 export default function Leaderboard() {
   const navigate = useNavigate();
@@ -107,7 +108,7 @@ export default function Leaderboard() {
     return (
       <div className="leaderboard-page">
         <div className="loading-spinner">
-          <div className="spinner"></div>
+          <Loader />
           <p>Loading leaderboard...</p>
         </div>
       </div>

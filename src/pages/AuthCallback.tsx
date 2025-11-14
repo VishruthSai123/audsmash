@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import Loader from '../components/Loader';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -35,9 +36,9 @@ export default function AuthCallback() {
   }, [navigate]);
 
   return (
-    <div className="auth-page">
+    <div className="auth-callback-page">
       <div className="loading-spinner">
-        <div className="spinner"></div>
+        <Loader />
         <p>Completing sign in...</p>
       </div>
     </div>
