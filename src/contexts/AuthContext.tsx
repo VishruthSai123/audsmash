@@ -23,13 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Set timeout to prevent infinite loading
+    // Set timeout to prevent infinite loading (increased to 8 seconds)
     const loadingTimeout = setTimeout(() => {
       if (mounted) {
         console.warn('Auth loading timeout - forcing loading to false');
         setLoading(false);
       }
-    }, 3000);
+    }, 8000);
 
     // Check active sessions and sets the user
     const initializeAuth = async () => {
@@ -59,20 +59,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
-      console.log('Auth state change:', event);
+      console.log('Auth state change:', event, 'User:', session?.user?.id);
       
+      // Update session and user
       setSession(session);
       setUser(session?.user ?? null);
       
-      // Ensure loading is false immediately after setting user
+      // Ensure loading is false immediately
       setLoading(false);
       
-      // Create profile for OAuth sign-ins (non-blocking)
+      // Only create profile on initial sign-in, not on token refresh or user update
       if (event === 'SIGNED_IN' && session?.user) {
         ensureProfileExists(session.user).catch(error => {
           console.error('Error ensuring profile exists:', error);
         });
       }
+      
+      // Don't trigger profile creation on USER_UPDATED or TOKEN_REFRESHED
     });
 
     return () => {
@@ -209,18 +212,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('Profile creation error:', profileError);
           }
         } else {
-          // Update existing profile with Google avatar if available
+          // Only update Google avatar on first OAuth login if using default dicebear
           const googleAvatar = 
             user.user_metadata?.avatar_url ||
             user.user_metadata?.picture ||
             (user.identities?.[0]?.identity_data?.avatar_url) ||
             (user.identities?.[0]?.identity_data?.picture);
 
-          if (googleAvatar && existingProfile.avatar_url?.includes('dicebear')) {
+          // Only auto-update if still using dicebear default
+          if (googleAvatar && existingProfile.avatar_url?.includes('dicebear.com')) {
             await (supabase as any)
               .from('profiles')
               .update({ avatar_url: googleAvatar })
-              .eq('id', user.id);
+              .eq('id', user.id)
+              .then(() => console.log('Updated profile with Google avatar'))
+              .catch((err: any) => console.error('Failed to update avatar:', err));
           }
         }
       } catch (error) {

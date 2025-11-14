@@ -9,14 +9,14 @@ export default function AuthCallback() {
   const [hasNavigated, setHasNavigated] = useState(false);
 
   useEffect(() => {
-    // Failsafe timeout - force navigation after 5 seconds
+    // Failsafe timeout - force navigation after 8 seconds (increased)
     const failsafeTimer = setTimeout(() => {
       if (!hasNavigated) {
         console.warn('AuthCallback: Timeout reached, forcing navigation');
         setHasNavigated(true);
         navigate('/', { replace: true });
       }
-    }, 5000);
+    }, 8000);
 
     return () => clearTimeout(failsafeTimer);
   }, [hasNavigated, navigate]);

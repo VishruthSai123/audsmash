@@ -108,6 +108,11 @@ export default function Profile() {
     if (!user || !username.trim()) return;
 
     try {
+      // Optimistic update
+      if (profile) {
+        setProfile({ ...profile, username: username.trim() });
+      }
+
       const { error } = await (supabase as any)
         .from('profiles')
         .update({ username: username.trim() })
@@ -116,10 +121,12 @@ export default function Profile() {
       if (error) throw error;
 
       setEditMode(false);
-      loadProfile(user.id);
+      console.log('Username updated successfully');
     } catch (err: any) {
       console.error('Error updating profile:', err);
       alert(err.message || 'Failed to update profile');
+      // Reload on error
+      loadProfile(user.id);
     }
   };
 
@@ -127,6 +134,12 @@ export default function Profile() {
     if (!user) return;
 
     try {
+      // Optimistic update - update UI immediately
+      if (profile) {
+        setProfile({ ...profile, avatar_url: avatarUrl });
+      }
+
+      // Update in database
       const { error } = await (supabase as any)
         .from('profiles')
         .update({ avatar_url: avatarUrl })
@@ -134,10 +147,13 @@ export default function Profile() {
 
       if (error) throw error;
 
-      loadProfile(user.id);
+      console.log('Avatar updated successfully');
+      // Don't reload - we already updated the UI optimistically
     } catch (err: any) {
       console.error('Error updating avatar:', err);
       alert(err.message || 'Failed to update avatar');
+      // Reload on error to get correct state
+      loadProfile(user.id);
     }
   };
 
