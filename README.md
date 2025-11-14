@@ -195,30 +195,61 @@ audsmash/
 
 ## 🚢 Deployment
 
+### Quick Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+
 ### Build for Production
 
 ```bash
 npm run build
 ```
 
-This creates optimized files in `dist/` folder.
+This creates optimized files in `dist/` folder with code splitting.
 
-### Deploy Frontend
+### Deploy to Vercel (Recommended)
 
-Deploy to any of these:
-- **Vercel**: Connect GitHub repo, auto-deploys
-- **Netlify**: Drag & drop `dist` folder
-- **GitHub Pages**: Use GitHub Actions
-- **Cloudflare Pages**: Connect repo
+**Option 1: Via Dashboard**
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import your Git repository
+3. Configure:
+   - Framework: **Vite**
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+4. Add environment variables:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_SERPER_API_KEY`
+5. Deploy!
 
-**Don't forget** to set environment variables in hosting platform!
+**Option 2: Via CLI**
+```bash
+npm i -g vercel
+vercel login
+vercel
+```
 
-### Deploy Backend API (Optional)
+**Post-Deployment:**
+- Add your Vercel URL to Supabase redirect URLs
+- Update Google OAuth authorized URIs (if using)
+- See `DEPLOYMENT.md` for complete guide
 
-- **Vercel**: Serverless functions
-- **Railway**: One-click Node.js deploy
-- **Heroku**: Git push deploy
-- **Render**: Connect GitHub repo
+### Deploy to Other Platforms
+
+- **Netlify**: Connect GitHub, set build command to `npm run build` and publish dir to `dist`
+- **Cloudflare Pages**: Connect repo, framework preset **Vite**, build command `npm run build`
+- **GitHub Pages**: Use GitHub Actions with Vite build
+- **Railway/Render**: Node.js deployment with build command
+
+**Important**: All platforms require environment variables to be set!
+
+### Configuration Files
+
+- `vercel.json`: SPA routing and cache optimization
+- `vite.config.ts`: Code splitting and build optimization
+- `.env.production.example`: Template for production variables
+
+See `PRE_DEPLOY_CHECKLIST.md` before deploying!
 
 ## 📊 Database Schema Overview
 
